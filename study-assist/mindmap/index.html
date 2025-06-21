@@ -1,0 +1,563 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mind Map Builder</title>
+  <script src="https://cdn.jsdelivr.net/npm/konva@8.3.8/konva.min.js"></script>
+  <style>
+    :root {
+      --bg-light: linear-gradient(120deg, #f6d365 0%, #fda085 100%);
+      --bg-dark: linear-gradient(120deg, #2c3e50, #34495e);
+      --toolbar-light: rgba(255, 255, 255, 0.25);
+      --toolbar-dark: rgba(44, 62, 80, 0.7);
+      --text-light: #2c3e50;
+      --text-dark: #ecf0f1;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      transition: background 0.5s ease;
+      background: var(--bg-light);
+    }
+
+    body.dark {
+      background: var(--bg-dark);
+    }
+
+    h2 {
+      margin: 20px;
+      font-size: 2.5rem;
+      text-shadow: 2px 2px 4px #fff;
+      background: linear-gradient(to right, #00c6ff, #0072ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    #toolbar {
+      margin: 10px;
+      padding: 15px 25px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      backdrop-filter: blur(10px);
+      background: var(--toolbar-light);
+      transition: background 0.5s ease;
+    }
+
+    body.dark #toolbar {
+      background: var(--toolbar-dark);
+    }
+
+    button, input[type="color"] {
+      margin: 5px;
+      padding: 10px 16px;
+      background-color: #6c5ce7;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    button:hover, input[type="color"]:hover {
+      background-color: #4834d4;
+    }
+
+    input[type="color"] {
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    }
+
+    #info, #modeToggle {
+      margin-top: 5px;
+      font-size: 14px;
+      color: var(--text-light);
+      transition: color 0.5s ease;
+    }
+
+    body.dark #info, body.dark #modeToggle {
+      color: var(--text-dark);
+    }
+
+    #container {
+      border: 2px solid #dfe6e9;
+      width: 90vw;
+      height: 75vh;
+      background: #ffffff;
+      border-radius: 15px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    #edit-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: #fffafc;
+      padding: 25px;
+      border: 1px solid #ccc;
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 100;
+      border-radius: 12px;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #edit-modal.active {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+
+    #edit-modal input, #edit-modal textarea {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+    }
+
+    #edit-modal button {
+      background-color: #00b894;
+    }
+
+    #edit-modal button:hover {
+      background-color: #009874;
+    }
+
+    .back-arrow {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      font-size: 1.3rem;
+      text-decoration: none;
+      color: #6a1b9a;
+      background: #d1c4e9;
+      padding: 8px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 1100;
+      font-weight: 600;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .back-arrow:hover {
+      background: #6a1b9a;
+      color: #fff;
+    }
+
+  </style>
+</head>
+<body>
+  <a href="../options.php" class="back-arrow" title="Back to options">&#8592; Back</a>
+
+  <h2>🧠 Mind Map Builder</h2>
+  <div id="toolbar">
+    <button id="add-node">➕ Add Node</button>
+    <button id="delete-selected">🗑️ Delete Selected</button>
+    <button id="toggle-mode">🔀 Mode: Link</button>
+    <button id="dissolve-selected">💣 Dissolve Node</button>
+    <input type="color" id="color-picker" title="Pick shape color" />
+    <button id="theme-toggle">🌓 Toggle Theme</button>
+    <button id="retrieve-nodes">🔄 Retrieve Mind Map</button>
+    
+  </div>
+  <div id="info">🔗 Click nodes to select for linking. Selected node: <span id="selected-node">None</span></div>
+  <div id="modeToggle">Current Mode: <strong>Link Mode</strong></div>
+  <div id="container"></div>
+
+  <div id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-label">
+    <label id="edit-modal-label">📝 Edit Node</label>
+    <label>Text:<br><textarea id="edit-text" rows="3"></textarea></label>
+    <button id="save-edit">💾 Save</button>
+    <button id="cancel-edit">❌ Cancel</button>
+  </div>
+
+  <audio id="click-sound" src="https://cdn.pixabay.com/audio/2022/10/09/audio_b2bc634f5c.mp3" preload="auto"></audio>
+
+  <script>
+    
+    const userId = 1; 
+
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+    });
+
+    const clickSound = document.getElementById("click-sound");
+    document.querySelectorAll("button").forEach(btn => {
+      btn.addEventListener("click", () => clickSound.play());
+    });
+
+    const stage = new Konva.Stage({
+      container: 'container',
+      width: document.getElementById('container').offsetWidth,
+      height: document.getElementById('container').offsetHeight,
+    });
+
+    const layer = new Konva.Layer();
+    stage.add(layer);
+
+    const nodes = [];
+    const links = [];
+    let selectedNode = null;
+    let selectedNodeShape = null;
+    let mode = 'link';
+    let currentEditNode = null;
+
+    function updateModeDisplay() {
+      document.getElementById('modeToggle').innerHTML =
+        'Current Mode: <strong>' + (mode === 'link' ? 'Link Mode' : 'Add Mode') + '</strong>';
+      document.getElementById('toggle-mode').textContent = '🔀 Mode: ' + (mode === 'link' ? 'Link' : 'Add');
+    }
+
+    document.getElementById('toggle-mode').addEventListener('click', () => {
+      mode = mode === 'link' ? 'add' : 'link';
+      updateModeDisplay();
+    });
+
+    document.getElementById('color-picker').addEventListener('input', (e) => {
+      if (selectedNodeShape) {
+        selectedNodeShape.fill(e.target.value);
+        layer.draw();
+      }
+    });
+
+    function addNode() {
+      const group = new Konva.Group({
+        x: Math.random() * (stage.width() - 100),
+        y: Math.random() * (stage.height() - 40),
+        draggable: true,
+      });
+
+      const rect = new Konva.Rect({
+        width: 120,
+        height: 60,
+        fill: '#d0eaff',
+        stroke: '#007acc',
+        strokeWidth: 2,
+        cornerRadius: 6,
+      });
+
+      const label = new Konva.Text({
+        text: 'Node',
+        fontSize: 14,
+        fill: '#000',
+        width: 120,
+        height: 60,
+        align: 'center',
+        verticalAlign: 'middle',
+        padding: 10,
+      });
+
+      group.add(rect);
+      group.add(label);
+      layer.add(group);
+
+      const node = { group, shape: rect, label, id: Date.now() };
+      nodes.push(node);
+      layer.draw();
+
+      // Add resizing functionality
+      const resizeHandle = new Konva.Circle({
+        x: rect.width() + 10,
+        y: rect.height() + 10,
+        radius: 8,
+        fill: '#ff0000',
+        draggable: true,
+      });
+
+      group.add(resizeHandle);
+
+      resizeHandle.on('dragmove', () => {
+        const newWidth = resizeHandle.x() - rect.x();
+        const newHeight = resizeHandle.y() - rect.y();
+        if (newWidth > 50 && newHeight > 30) { 
+          rect.width(newWidth);
+          rect.height(newHeight);
+          label.width(newWidth);
+          label.height(newHeight);
+          label.x(rect.x() + 10); 
+          label.y(rect.y() + (newHeight - label.height()) / 2); 
+          resizeHandle.x(newWidth + 10);
+          resizeHandle.y(newHeight + 10);
+          layer.draw();
+        }
+      });
+
+      group.on('click', () => {
+        if (mode === 'link') {
+          if (!selectedNode) {
+            selectedNode = node;
+            selectedNodeShape = rect;
+            highlightNode(node, true);
+          } else if (selectedNode !== node) {
+            createLink(selectedNode, node);
+            highlightNode(selectedNode, false);
+            selectedNode = null;
+            selectedNodeShape = null;
+          } else {
+            highlightNode(node, false);
+            selectedNode = null;
+            selectedNodeShape = null;
+          }
+        } else {
+          if (selectedNode) highlightNode(selectedNode, false);
+          selectedNode = node;
+          selectedNodeShape = rect;
+          highlightNode(node, true);
+          openEditModal(node);
+        }
+        updateSelectedDisplay();
+      });
+
+      group.on('dragmove', updateLinks);
+    }
+
+    function highlightNode(node, highlight) {
+      node.shape.stroke(highlight ? '#ff0000' : '#007acc');
+      node.shape.strokeWidth(highlight ? 3 : 2);
+      layer.draw();
+    }
+
+    function createLink(nodeA, nodeB) {
+      const line = new Konva.Line({
+        points: getNodePoints(nodeA, nodeB),
+        stroke: '#666',
+        strokeWidth: 2,
+        lineCap: 'round',
+      });
+      links.push({ line, nodeA, nodeB });
+      layer.add(line);
+      layer.moveToBottom();
+      layer.draw();
+    }
+
+    function getNodePoints(nodeA, nodeB) {
+      return [
+        nodeA.group.x() + 60,
+        nodeA.group.y() + 30,
+        nodeB.group.x() + 60,
+        nodeB.group.y() + 30,
+      ];
+    }
+
+    function updateLinks() {
+      links.forEach(link => {
+        link.line.points(getNodePoints(link.nodeA, link.nodeB));
+      });
+      layer.batchDraw();
+    }
+
+    function updateSelectedDisplay() {
+      const span = document.getElementById('selected-node');
+      span.textContent = selectedNode ? `Node at (${selectedNode.group.x().toFixed(0)}, ${selectedNode.group.y().toFixed(0)})` : 'None';
+    }
+
+ document.getElementById('delete-selected').addEventListener('click', () => {
+  if (selectedNodeShape) {
+    // Remove the node from the canvas
+    const node = nodes.find(n => n.shape === selectedNodeShape);
+    node.group.destroy();
+    nodes.splice(nodes.indexOf(node), 1);
+    layer.draw();
+    selectedNode = null;
+    selectedNodeShape = null;
+    updateSelectedDisplay();
+  }
+});
+
+document.getElementById('dissolve-selected').addEventListener('click', () => {
+  if (selectedNodeShape) {
+    const node = nodes.find(n => n.shape === selectedNodeShape);
+    if (node) {
+      // Send a request to delete the node from the database
+      fetch('database.php', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ id: node.id, userId: userId }) 
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          console.log('Node dissolved successfully');
+          
+          node.group.destroy();
+          nodes.splice(nodes.indexOf(node), 1);
+          layer.draw(); 
+          selectedNode = null;
+          selectedNodeShape = null;
+          updateSelectedDisplay();
+        } else {
+          console.error('Error dissolving node:', data.message);
+        }
+      })
+      .catch(error => {
+        console.error('Error dissolving node:', error);
+      });
+    }
+  }
+});
+
+
+    function openEditModal(node) {
+      currentEditNode = node;
+      document.getElementById('edit-text').value = node.label.text();
+      document.getElementById('edit-modal').classList.add('active');
+    }
+
+    document.getElementById('save-edit').addEventListener('click', () => {
+      if (currentEditNode) {
+      
+        const newText = document.getElementById('edit-text').value;
+        currentEditNode.label.text(newText);
+        
+        
+        const fontSize = 14; 
+        const fixedHeight = 60; 
+        const tempText = new Konva.Text({
+          text: newText,
+          fontSize: fontSize,
+          padding: 10,
+        });
+
+        const textWidth = tempText.width();
+
+      
+        currentEditNode.shape.width(textWidth + 20); 
+
+        
+        currentEditNode.label.width(textWidth + 20);
+        currentEditNode.label.height(fixedHeight);
+        currentEditNode.label.x(10); 
+        currentEditNode.label.y((fixedHeight - currentEditNode.label.height()) / 2); 
+
+        
+        saveNode(currentEditNode);
+
+        
+        document.getElementById('edit-modal').classList.remove('active');
+        currentEditNode = null; 
+      }
+    });
+
+    document.getElementById('cancel-edit').addEventListener('click', () => {
+      document.getElementById('edit-modal').classList.remove('active');
+    });
+
+    document.getElementById('add-node').addEventListener('click', addNode);
+
+    document.getElementById('delete-selected').addEventListener('click', () => {
+      if (selectedNodeShape) deleteNode(selectedNodeShape);
+    });
+
+    document.getElementById('retrieve-nodes').addEventListener('click', retrieveNodes);
+
+    stage.on('click', e => {
+      if (e.target === stage) {
+        if (selectedNode) {
+          highlightNode(selectedNode, false);
+          selectedNode = null;
+          selectedNodeShape = null;
+          updateSelectedDisplay();
+        }
+      }
+    });
+
+    function retrieveNodes() {
+      fetch(`database.php?userId=${userId}`)
+        .then(response => response.json())
+        .then(data => {
+          data.forEach(nodeData => {
+            const group = new Konva.Group({
+              x: nodeData.x,
+              y: nodeData.y,
+              draggable: true,
+            });
+
+            const rect = new Konva.Rect({
+              width: nodeData.width,
+              height: nodeData.height,
+              fill: '#d0eaff',
+              stroke: '#007acc',
+              strokeWidth: 2,
+              cornerRadius: 6,
+            });
+
+            const label = new Konva.Text({
+              text: nodeData.text,
+              fontSize: 14,
+              fill: '#000',
+              width: nodeData.width,
+              height: nodeData.height,
+              align: 'center',
+              verticalAlign: 'middle',
+              padding: 10,
+            });
+
+            group.add(rect);
+            group.add(label);
+            layer.add(group);
+
+            const node = { group, shape: rect, label, id: nodeData.id };
+            nodes.push(node);
+
+            
+            group.on('click', () => {
+              if (selectedNode) highlightNode(selectedNode, false);
+              selectedNode = node;
+              selectedNodeShape = rect;
+              highlightNode(node, true);
+              openEditModal(node);
+              updateSelectedDisplay();
+            });
+          });
+          layer.draw();
+        });
+    }
+
+    function saveNode(node) {
+      const data = {
+        text: node.label.text(),
+        x: node.group.x(),
+        y: node.group.y(),
+        width: node.shape.width(),
+        height: node.shape.height(),
+        userId: userId 
+      };
+
+      fetch('database.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(data),
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log(data);
+      });
+    }
+
+    updateModeDisplay();
+  </script>
+</body>
+</html>

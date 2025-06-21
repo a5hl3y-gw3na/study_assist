@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flip Flashcards</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #e0f7fa, #fff);
+      margin: 0;
+      padding: 30px;
+      color: #333;
+    }
+
+    h2 {
+      font-size: 2rem;
+      color: #00695c;
+    }
+
+    p {
+      font-family: monospace;
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 180px;
+      padding: 15px;
+      font-size: 1rem;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      margin-bottom: 15px;
+      resize: vertical;
+    }
+
+    button {
+      padding: 12px 25px;
+      background-color: #26a69a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin-right: 10px;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background-color: #00796b;
+    }
+
+    #flashcardsContainer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .flashcard {
+      position: relative;
+      perspective: 1000px;
+      width: 250px;
+      height: 160px;
+    }
+
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      text-align: center;
+      transition: transform 0.8s;
+      transform-style: preserve-3d;
+      cursor: pointer;
+    }
+
+    .card-inner.flipped {
+      transform: rotateY(180deg);
+    }
+
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      font-size: 1rem;
+      overflow: auto;
+    }
+
+    .card-front {
+      background-color: #ffffff;
+      color: #004d40;
+      font-weight: bold;
+    }
+
+    .card-back {
+      background-color: #f0fdfc;
+      color: #444;
+      transform: rotateY(180deg);
+      font-style: italic;
+    }
+
+    .fullscreen-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      z-index: 10;
+      border-radius: 4px;
+    }
+
+    .exit-btn {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      background: rgba(255, 0, 0, 0.5);
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      font-size: 14px;
+      border-radius: 4px;
+      z-index: 11;
+      display: none;
+    }
+
+    .flashcard.fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+      background: white;
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .flashcard.fullscreen .card-inner {
+      width: 60vw;
+      height: 60vh;
+      transform-style: preserve-3d;
+    }
+
+    .flashcard.fullscreen .card-front,
+    .flashcard.fullscreen .card-back {
+      font-size: 1.2rem;
+    }
+
+    .flashcard.fullscreen .fullscreen-btn {
+      font-size: 16px;
+      top: 20px;
+      right: 20px;
+    }
+
+    .flashcard.fullscreen .exit-btn {
+      display: block;
+    }
+
+    .editable {
+      outline: none;
+    }
+
+    .back-arrow {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      font-size: 1.3rem;
+      text-decoration: none;
+      color: #00796b;
+      background: #b2dfdb;
+      padding: 8px 14px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      z-index: 1100;
+      font-weight: 600;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .back-arrow:hover {
+      background: teal;
+      color: white;
+    }
+
+  </style>
+</head>
+<body>
+  <a href="options.php" class="back-arrow" title="Back to options">&#8592; Back</a>
+  <h2>🃏 Flashcards Generator</h2>
+  <p>Use format:<br><code>Q: Question text<br>A: Answer text</code></p>
+
+  <textarea id="contentInput" placeholder="Enter Q&A pairs here..."></textarea>
+  <div>
+    <button id="generateBtn">Generate Flashcards</button>
+    <button id="captureBtn">Capture as Image</button>
+  </div>
+
+  <div id="flashcardsContainer"></div>
+
+  <script>
+    const generateBtn = document.getElementById('generateBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const contentInput = document.getElementById('contentInput');
+    const container = document.getElementById('flashcardsContainer');
+
+    function prepareForCapture(card) {
+      const inner = card.querySelector('.card-inner');
+      const isFlipped = inner.classList.contains('flipped');
+
+      inner.style.transform = isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)';
+      inner.style.transition = 'none';
+
+      return () => {
+        inner.style.transform = '';
+        inner.style.transition = '';
+      };
+    }
+
+    function parseInput(input) {
+      const lines = input.split('\n');
+      const pairs = [];
+      let currentQ = null;
+      let currentA = null;
+
+      lines.forEach(line => {
+        line = line.trim();
+        if (line.startsWith('Q:')) {
+          if (currentQ || currentA) {
+            if (currentQ && currentA) {
+              pairs.push({ question: currentQ, answer: currentA });
+            }
+            currentQ = null;
+            currentA = null;
+          }
+          currentQ = line.substring(2).trim();
+        } else if (line.startsWith('A:')) {
+          currentA = line.substring(2).trim();
+        } else {
+          if (currentA !== null) {
+            currentA += ' ' + line;
+          } else if (currentQ !== null) {
+            currentQ += ' ' + line;
+          }
+        }
+      });
+      if (currentQ && currentA) {
+        pairs.push({ question: currentQ, answer: currentA });
+      }
+      console.log('Parsed pairs:', pairs);
+      return pairs;
+    }
+
+    function createFlashcard(pair) {
+      const card = document.createElement('div');
+      card.className = 'flashcard';
+
+      const inner = document.createElement('div');
+      inner.className = 'card-inner';
+
+      const front = document.createElement('div');
+      front.className = 'card-front editable';
+      front.contentEditable = true;
+      front.innerHTML = pair.question || 'Question';
+
+      const back = document.createElement('div');
+      back.className = 'card-back editable';
+      back.contentEditable = true;
+      back.innerHTML = pair.answer || 'Answer';
+
+      inner.appendChild(front);
+      inner.appendChild(back);
+      card.appendChild(inner);
+
+      const fsBtn = document.createElement('button');
+      fsBtn.className = 'fullscreen-btn';
+      fsBtn.innerHTML = '⤢';
+      fsBtn.title = 'View Fullscreen';
+      card.appendChild(fsBtn);
+
+      const exitBtn = document.createElement('button');
+      exitBtn.className = 'exit-btn';
+      exitBtn.innerHTML = '✖';
+      exitBtn.title = 'Exit Fullscreen';
+      card.appendChild(exitBtn);
+
+      const downloadBtn = document.createElement('button');
+      downloadBtn.className = 'fullscreen-btn';
+      downloadBtn.style.top = '40px';
+      downloadBtn.style.right = '6px';
+      downloadBtn.innerHTML = '🖼️';
+      downloadBtn.title = 'Download this card';
+      card.appendChild(downloadBtn);
+
+      inner.addEventListener('click', (e) => {
+        if (!e.target.closest('button')) {
+          inner.classList.toggle('flipped');
+        }
+      });
+
+      // Fullscreen toggle
+      fsBtn.addEventListener('click', () => {
+        card.classList.toggle('fullscreen');
+      });
+
+      // Exit fullscreen
+      exitBtn.addEventListener('click', () => {
+        card.classList.remove('fullscreen');
+      });
+
+      // Download current visible side
+      downloadBtn.addEventListener('click', () => {
+        html2canvas(card).then(canvas => {
+          const link = document.createElement('a');
+          link.href = canvas.toDataURL('image/png');
+          link.download = 'flashcard.png';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        });
+      });
+
+      return card;
+    }
+
+    generateBtn.addEventListener('click', () => {
+      container.innerHTML = '';
+      const inputText = contentInput.value;
+      const pairs = parseInput(inputText);
+
+      if (pairs.length === 0) {
+        alert('No valid Q&A pairs found. Please check your input format.');
+        return;
+      }
+
+      pairs.forEach(pair => {
+        const flashcard = createFlashcard(pair);
+        container.appendChild(flashcard);
+      });
+    });
+
+    captureBtn.addEventListener('click', () => {
+      const cards = container.querySelectorAll('.flashcard');
+
+      const restoreFns = [];
+      cards.forEach(card => {
+        card.classList.remove('fullscreen');
+        restoreFns.push(prepareForCapture(card)); 
+      });
+
+      html2canvas(container).then(canvas => {
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = 'flashcards.png';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        restoreFns.forEach(fn => fn());
+      }).catch(err => {
+        alert('Error capturing image: ' + err);
+        restoreFns.forEach(fn => fn());
+      });
+    });
+
+    document.addEventListener('keydown', (e) => {
+      const fullscreenCard = document.querySelector('.flashcard.fullscreen .card-inner');
+      if (!fullscreenCard) return;
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        fullscreenCard.classList.toggle('flipped');
+      }
+    });
+
+  </script>
+
+</body>
+</html>
+
